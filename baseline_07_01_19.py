@@ -285,7 +285,7 @@ print('The coverage is ' + str(coverage)+' %.')
 
 ### Model 2 (original He Hu 2002) LAD regression f(0) ? ###
 
-def simul_originmod(n,df=3,seed=None): # Model 1 of Kocherginsky (2002)
+def simul_originmod(n,df=3,seed=None): 
     """ Simulate y= b0 + b1*x1 + b2*x2 + b3*x3 + e, with x1,x2,x3 and e following a standard t-distribution (df = v), 
     and b0=b1=b2=b3=0.
   """
@@ -302,6 +302,7 @@ def simul_originmod(n,df=3,seed=None): # Model 1 of Kocherginsky (2002)
     
 mean_coverage = [] # store proportion of "insiders" by iteration
 mean_length = [] # store mean length by iteration
+exploding = 0
 
 samples = 500   # choose number of samples
 for iteration in range(samples):
@@ -336,18 +337,26 @@ for iteration in range(samples):
     
     tag=0
     length=[]
-    for i in IC:
-        length.append(i[1] - i[0])
-        if 0 >= i[0] and i[1] >= 0 :
-            tag += 1 
-    mean_coverage.append(np.divide(tag,len(beta)))
-    mean_length.append(np.divide(length,len(beta)))
-    print(IC)
+    check_convergence = 0
+    for elem in IC:
+        if (np.abs(elem[1])>10000 or np.abs(elem[0])>10000):
+            check_convergence += 1 
+    if check_convergence==0:
+        for i in IC:
+            length.append(i[1] - i[0])
+            if 0 >= i[0] and i[1] >= 0 :
+                tag += 1 
+        mean_coverage.append(np.divide(tag,len(beta)))
+        mean_length.append(np.divide(length,len(beta)))
+        print(iteration)
+    else :
+        exploding +=1
     
-    print(iteration)
-    
-print('Mean coverage %s ' % np.mean(mean_coverage))
-print('Mean length %s ' % np.mean(mean_length))
+print('Mean coverage', np.mean(mean_coverage)*100)
+print('Mean length ', np.mean(mean_length))
+print('Percentage of exploding bounds', np.divide(exploding,samples)*100)
+
+
     
 
 
