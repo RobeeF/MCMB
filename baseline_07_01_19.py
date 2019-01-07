@@ -259,7 +259,7 @@ for iteration in range(iter_max):
         chain = np.dot(compute_A(X), np.transpose(np.array(chain)) )
         chain = np.transpose(chain)
     else:
-        chain = MCMB(Y=Y, X=X_tilde, beta_hat=beta_hat, tau=tau, maxiter=50)
+        chain = MCMB(Y=Y, X=X, beta_hat=beta_hat, tau=tau, maxiter=50)
         chain = np.array(chain)
 
     # Covariance matrix
