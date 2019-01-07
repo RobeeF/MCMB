@@ -259,7 +259,7 @@ for iteration in range(iter_max):
         chain = np.dot(compute_A(X), np.transpose(np.array(chain)) )
         chain = np.transpose(chain)
     else:
-        chain = MCMB(Y=Y, X=X, beta_hat=beta_hat, tau=tau, maxiter=50)
+        chain = MCMB(Y=Y, X=X_tilde, beta_hat=beta_hat, tau=tau, maxiter=50)
         chain = np.array(chain)
 
     # Covariance matrix
@@ -281,3 +281,73 @@ for iteration in range(iter_max):
 
 coverage = inside/iter_max*100
 print('The coverage is ' + str(coverage)+' %.')
+    
+
+### Model 2 (original He Hu 2002) LAD regression f(0) ? ###
+
+def simul_originmod(n,df=3,seed=None): # Model 1 of Kocherginsky (2002)
+    """ Simulate y= b0 + b1*x1 + b2*x2 + b3*x3 + e, with x1,x2,x3 and e following a standard t-distribution (df = v), 
+    and b0=b1=b2=b3=0.
+  """
+    np.random.RandomState(seed)
+    X_1 = np.random.standard_t(df,n).reshape((-1,1))
+    X_2 = np.random.standard_t(df,n).reshape((-1,1))
+    X_3 = np.random.standard_t(df,n).reshape((-1,1))
+    e = np.random.standard_t(df,n).reshape((-1,1))
+    X = np.hstack([np.ones((n,1)), X_1, X_2, X_3])
+    coefs_ = np.zeros((X.shape[1],1)).reshape(-1,1)
+    return (np.dot(X,coefs_) + e,X)
+
+# Interval coverage
+    
+mean_coverage = [] # store proportion of "insiders" by iteration
+mean_length = [] # store mean length by iteration
+
+samples = 500   # choose number of samples
+for iteration in range(samples):
+    np.random.seed(iteration)
+    model2 = simul_originmod(n=50,df=3, seed=iteration)
+    #model2 = simul_originmod(n=50,df=8, seed=iteration)
+    Y = model2[0]
+    X = model2[1]
+
+    # Estimation of beta_hat
+    from statsmodels.regression.quantile_regression import QuantReg
+    
+    data = np.hstack([Y,X])
+    mod = QuantReg(Y, X)
+    res = mod.fit(q=tau)
+    
+    beta_hat = list(res.params)
+
+    # MCMB
+    chain = MCMB(Y=Y, X=X, beta_hat=beta_hat, tau=tau, maxiter=1000)
+    
+    # Covariance matrix
+    Sigma = np.cov(np.array(chain), rowvar=False)
+    
+    # Confidence interval
+    p = len(beta_hat)
+    IC = []
+    
+    for i in range(p):
+        IC.append([beta_hat[i]-1.64*np.sqrt(Sigma[i,i]),
+                   beta_hat[i]+1.64*np.sqrt(Sigma[i,i])])
+    
+    tag=0
+    length=[]
+    for i in IC:
+        length.append(i[1] - i[0])
+        if 0 >= i[0] and i[1] >= 0 :
+            tag += 1 
+    mean_coverage.append(np.divide(tag,len(beta)))
+    mean_length.append(np.divide(length,len(beta)))
+    print(IC)
+    
+    print(iteration)
+    
+print('Mean coverage %s ' % np.mean(mean_coverage))
+print('Mean length %s ' % np.mean(mean_length))
+    
+
+
