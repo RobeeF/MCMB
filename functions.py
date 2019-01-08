@@ -9,8 +9,6 @@ Created on Wed Nov 28 21:09:39 2018
 #==============================================================================
 
 # Initialisation
-import os
-os.chdir("G:/Documents/ENSAE/3A ENSAE/Semi and non parametric econometrics")
 
 # Packages
 import numpy as np
@@ -107,9 +105,8 @@ def weighted_quantile(X, Y, Z, beta, j, tau):
     X_j = X[:,j]
     Y_star = residuals(Y, X_star, beta_star)    
     # Adding the n+1th row to Y_star and X_j
-    Y_star = np.append(Y_star, 10**15)
+    Y_star = np.append(Y_star, 3000)
     X_j = np.append(X_j, -c_star/tau)
-    
     Z_star = np.divide(Y_star, X_j)
     
     # Tau_star
@@ -119,12 +116,7 @@ def weighted_quantile(X, Y, Z, beta, j, tau):
     # Normalization of weights (sum up to 1)
     S = sum(abs_X_j)
     abs_X_j = abs_X_j/S
-    
-    # Sorting Z in ascending order
-    abs_X_j = np.reshape(abs_X_j, (-1,1))
-    Z_star = np.reshape(Z_star, (-1,1))
 
-    
     return quantile_1D(np.reshape(Z_star, -1), np.reshape(abs_X_j, -1), tau_star)
     
 
@@ -152,7 +144,7 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_c
     
     # Estimation of beta_hat
     mod = QuantReg(Y, X)
-    res = mod.fit(q=tau)
+    res = mod.fit(q=tau, max_iter=7000)
     beta_hat = res.params
     
     
@@ -204,8 +196,19 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_c
        beta_hat[i]+scipy.stats.norm.ppf(1-(alpha/2))*np.sqrt(Sigma[i,i])] for i in range(p)]
     return Beta if return_chain else (beta_hat, CI) 
 
-
+#==============================================================================
+# Ploting the betas
+#=============================================================================
+    
 def plot_same_graph(betas_chains, autocorr=True, title=''):
+    ''' Plot the betas series or the betas_autocorrelations series
+    betas_chains: (ndarray) the series
+    autocorr: (bool) display the serie or the autocorrelation serie
+    title: (str) a string to add to the title to identify the graph
+    ------------------------------------------------------------------
+    returns: The requested graph
+    '''
+    
     p = len(betas_chains)
     Kn = len(betas_chains[0])
     clrs = {}
@@ -257,14 +260,17 @@ def simul_model1(n, with_cst=False ,seed=None): # Model 1 of Kocherginsky (2002)
     return (np.dot(X,coefs_) + e,X)
 
 
-def simul_indep_multi_gaussian(size, sigma, mean ,seed=None):
+def simul_indep_multi_gaussian(n, p, mu, sigma, sigma_e ,coefs, seed=None):
     """ Simulate a multivariate gaussian matrix of size "size" 
     independant gaussian vector of variance sigma (and null covariance by construction)"""
-    mean = (1, 2)
-    cov = [[1, 0], [0, 1]]
+    mean = np.array([mu]*p)
+    cov = np.identity(p)
     rnd = np.random.RandomState(seed)
-    x = rnd.multivariate_normal(mean, cov, (3, 3))
-    return x
+    
+    e = rnd.normal(size=n, loc=0, scale=sigma_e).reshape((-1,1))
+    
+    X = rnd.multivariate_normal(mean=mean, cov=cov, check_valid='raise', size=n)
+    return (np.dot(X,coefs) + e,X)
 
 ### Paper He & Hu 2000 setting
 
