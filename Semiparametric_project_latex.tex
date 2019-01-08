@@ -70,12 +70,12 @@ For the sake of presentation, it is assumed that the function $g_i$ can be decom
 \ForEach{$j \in \{ 1, \dots,p$\}}
 \State Solve for $\hat{\theta}_j^{(k)}$ from $S_j\left(Y,\hat{\theta}_1^{(k)}, \dots, \hat{\theta}_{j-1}^{(k)},\hat{\theta}_j^{(k)}, \hat{\theta}_{j+1}^{(k-1)}, \dots,\hat{\theta}_p^{(k-1)}\right) = S_j^{*(k)}$,
 \State where $S_j$ is the $j$-th component of $S\left(Y,\theta\right)$, and $S_j^{*(k)}$ is the $j$-th component of 
-\State $\sum_{i=1}^na_i z_{1j}^{*(k)}$
+\State $\sum_{i=1}^na_i z_{ij}^{*(k)}$
 \EndFor
 \If {$k > \overline{K}$} Stop
 \EndIf
 \State $k \gets k+1$
-\State \textbf{goto} \emph{top}.
+\State \textbf{go to} \emph{top}.
 \EndProcedure
 \end{algorithmic}
 \end{algorithm}
@@ -288,6 +288,32 @@ Even in our quantile regression framework, the addition of the B transformation 
 
 
 
+\section{Simulations}
+
+We provide in the following section a series of simulations to assess the performance of the algorithm in the construction of confidence intervals for quantile regression parameters. In addition, we add several features in order to improve the computational efficiency or the speed of the baseline form of algorithm.\medskip
+
+
+\subsection{Simulations settings}
+
+The first improvement added to the basic version of the MCMB-A algorithm is the option of \textit{sample spacing}. Indeed, as underlined several times in the papers studied, the chain generated from the algorithm follows an autoregressive process and is subject to a risk of high autocorrelation. This can be the origin of a loss of efficiency. The A-transformation is an attempt to overcome this issue. Sample spacing is an alternative strategy and consists in selecting elements of the chain only each time a given number of iterations have been completed. As autocorrelation fades over time, non-consecutive elements of the chain are less or not correlated. Sample spacing is a common strategy in the Monte Carlo Markov Chain (MCMC) framework but comes at the price of computational burden, as a significant share of the iterations results are just thrown away.\smallskip
+
+A second strategy used in order to improve the efficiency of the algorithm is parallelization. This trick relies on the use of the full computational power of the machine. Indeed, modern computers are now equipped with several cores (usually two or four), that can run simultaneously. Parallelization consists in running several operations at the same time on several cores. This strategy can provide huge gains in terms of computation speed. However, a drawback in our setting is that the algorithm is inherently sequential (each operation can be performed only after the previous one has been completed). As a result, parallelization here implies a slight tweaking of the baseline algorithm, as the elements of the estimated parameters are updated in groups, instead of sequentially. A full description of the tweaked algorithm is provided in the appendix. In the end, parallelization speed up the process, at the cost of a loss of efficiency because of the group updating. UNCLEAR HERE IF THE PROPERTIES OF THE ESTIMATOR ARE STILL THE SAME\smallskip
+
+
+\begin{itemize}
+\item Length and coverage as benchmark for comparison ;
+\item Autocorrelograms and A-transformation (and sample spacing);
+\end{itemize}
+
+
+\subsection{Simulations results}
+
+
+
+
+
+
+
 \newpage
 
 \section{Appendix}
@@ -425,7 +451,32 @@ with $c(x_{i,j}, z_{i})=(2\tau-1)z_{i}\left[ \frac{\sum_{k=1}^{n+1}x_{k,j}}{\sum
 
 
 
+\subsection{MCMB algorithm with parallelization}
 
+\begin{algorithm}
+\caption{MCMB with parallelization}\label{parallel}
+\begin{algorithmic}[1]
+\Procedure{Initialize}{}
+\State $\hat{\theta}^{(0)} \gets \hat{\theta}$ and $k \gets 1$
+\BState \emph{top}:
+\ForEach{$J \in \{ \{1, \dots,c\},\{c+1, \dots,2c\},\dots,\{\left\lfloor p/c \right\rfloor c+1, \dots,p\} \}$}
+\State Draw a bootstrap sample $\{z_{1J}^{*(k)}, \dots, z_{nJ}^{*(k)}\}$ from $\{z_1, \dots, z_n\}$
+\EndFor
+\ForEach{$j \in J$}
+\State Solve for $\hat{\theta}_j^{(k)}$ from 
+$S_Jj\left(Y,\hat{\theta}_1^{(k)}, \dots, \hat{\theta}_{J1-1}^{(k)}, \hat{\theta}_{J1}^{(k-1)}, \dots,\hat{\theta}_{Jj-1}^{(k-1)}, \hat{\theta}_{Jj}^{(k)}, \hat{\theta}_{Jj+1}^{(k-1)}, \dots,\hat{\theta}_p^{(k-1)}\right) = S_Jj^{*(k)}$,
+\State where $S_Jj$ is the $Jj$-th component of $S\left(Y,\theta\right)$, and $S_Jj^{*(k)}$ is the $Jj$-th component of 
+\State $\sum_{i=1}^na_i z_{iJ}^{*(k)}$
+\EndFor
+\If {$k > \overline{K}$} Stop
+\EndIf
+\State $k \gets k+1$
+\State \textbf{go to} \emph{top}.
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+with c the number of cores, and $\left\lfloor x \right\rfloor$ the integer part of x.
 
 
 \end{document}
