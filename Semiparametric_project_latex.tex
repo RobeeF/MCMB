@@ -24,7 +24,7 @@ caption,natbib,pdflscape,subfigure,array, dsfont}
 
 \title{Semi and Non-parametric Econometrics Project}
 \author{Bruno BJAI, Robin FUCHS and Martin MUGNIER}
-\date{December 2018}
+\date{January 2019}
 
 \begin{document}
 
@@ -118,15 +118,6 @@ The method of Monte Carlo Marginal Bootstrap presents an important interest in t
 
 
 In the end, the major problem for the estimation of confidence intervals for quantile regression estimator is the computation complexity, whatever the method considered. The MCMB algorithm provides an alternative way to perform inference at a moderate computational cost for a moderate amount of observations (in the end, asymptotic estimation remains the best method for the biggest datasets).
-
-
-
-\begin{itemize}
-\item How to compare confidence intervals ? $=>$ Coverage and length (trade-off) + computational complexity (computational time) ;
-
-\item n = 10 000 and p=50 ;
-
-\end{itemize}	
 	
 	
 		
@@ -135,10 +126,6 @@ In the end, the major problem for the estimation of confidence intervals for qua
 As explained in He Hu (2002), MCMB has several advantages compared to alternative methods. The main feature of the algorithm is that it transforms a p-dimensional equation into p one-dimensional ones at each of its iteration, enabling significant computational efficiency gains. This reminds of usual Monte Carlo Markov Chain (MCMC) algorithms such as Gibbs samplers as it turns high dimensional problems into series of one dimensional ones. However, it does not use conditional distributions to draw elements but solves linear estimating equations. Also, notice that the resampling is done for the computation of each element, at each step. It produces a sequence of $\beta^{(k)}$ that follows a multivariate AR(1) process. 
 \smallskip
 
-
-\begin{itemize}
-\item Validity of MCMB is assured if K (length of the chain) grows with n (number of observations) in a controlled manner ;
-\end{itemize}
 
 In the framework of the quantile regression, this is how the algorithm is applied. Recall that the estimator for quantile regression is given by:
 \begin{equation}
@@ -293,16 +280,27 @@ Even in our quantile regression framework, the addition of the B transformation 
 We provide in the following section a series of simulations to assess the performance of the algorithm in the construction of confidence intervals for quantile regression parameters. In addition, we add several features in order to improve the computational efficiency or the speed of the baseline form of algorithm.\medskip
 
 
-\subsection{Simulations settings}
+\subsection{Simulations architecture}
 
-The first improvement added to the basic version of the MCMB-A algorithm is the option of \textit{sample spacing}. Indeed, as underlined several times in the papers studied, the chain generated from the algorithm follows an autoregressive process and is subject to a risk of high autocorrelation. This can be the origin of a loss of efficiency. The A-transformation is an attempt to overcome this issue. Sample spacing is an alternative strategy and consists in selecting elements of the chain only each time a given number of iterations have been completed. As autocorrelation fades over time, non-consecutive elements of the chain are less or not correlated. Sample spacing is a common strategy in the Monte Carlo Markov Chain (MCMC) framework but comes at the price of computational burden, as a significant share of the iterations results are just thrown away.\smallskip
+	\subsubsection{Settings}
+	
+The first improvement added to the basic version of the MCMB-A algorithm is the option of \textit{sample spacing}. Indeed, as underlined several times in the papers studied, the chain generated from the algorithm follows an autoregressive process and is subject to a risk of high autocorrelation. This can be the origin of a loss of efficiency. The A-transformation is an attempt to overcome this issue. Sample spacing is an alternative strategy and consists in selecting elements of the chain only each time a given number of iterations have been completed. As autocorrelation fades over time, non-consecutive elements of the chain are less or not correlated. Sample spacing is a common strategy in the Monte Carlo Markov Chain (MCMC) framework but comes at the price of computational burden, as a significant share of the iterations results are just thrown away. Notice those two methods are not mutually exclusive and can be used together.\smallskip
 
-A second strategy used in order to improve the efficiency of the algorithm is parallelization. This trick relies on the use of the full computational power of the machine. Indeed, modern computers are now equipped with several cores (usually two or four), that can run simultaneously. Parallelization consists in running several operations at the same time on several cores. This strategy can provide huge gains in terms of computation speed. However, a drawback in our setting is that the algorithm is inherently sequential (each operation can be performed only after the previous one has been completed). As a result, parallelization here implies a slight tweaking of the baseline algorithm, as the elements of the estimated parameters are updated in groups, instead of sequentially. A full description of the tweaked algorithm is provided in the appendix. In the end, parallelization speed up the process, at the cost of a loss of efficiency because of the group updating. UNCLEAR HERE IF THE PROPERTIES OF THE ESTIMATOR ARE STILL THE SAME\smallskip
+To get a more accurate idea of the effectiveness of the two methods to alleviate autocorrelation in the chain, we provide a series of autocorrelograms. These provide a clear way to illustrate the extent of the problem.\smallskip
+
+A second strategy used in order to improve the efficiency of the algorithm is \textit{parallelization}. This trick relies on the use of the full computational power of the machine. Indeed, modern computers are now equipped with several cores (usually two or four), that can run simultaneously. Parallelization consists in running several operations at the same time on several cores. This strategy can provide huge gains in terms of computation speed. However, a drawback in our setting is that the algorithm is inherently sequential (each operation can be performed only after the previous one has been completed). As a result, parallelization here implies a slight tweaking of the baseline algorithm, as the elements of the estimated parameters are updated in groups, instead of sequentially. A full description of the tweaked algorithm is provided in the appendix. In the end, parallelization speed up the process, at the cost of a loss of efficiency because of the group updating. UNCLEAR HERE IF THE PROPERTIES OF THE ESTIMATOR ARE STILL THE SAME\smallskip
 
 
+	\subsubsection{Confidence intervals}
+	
+	We compare the quality of the estimation of confidence intervals generated from the MCMB methods across a series of models, adding parameters and heteroscedasticity. We rely on a method similar to the one used in He and Hu (2002) and Kocherginsky et al. (2005). Namely, for a given model, we generate a series of confidence intervals from our algorithm. We then count the number of times the actual value of the parameter falls into the estimated interval (averaged over the parameter dimension). This gives us the average \textit{coverage} of the interval, that we want the closest as possible as the theoretical level of our interval.\smallskip
+	
+	In a second time, we compute the mean length of the interval. Indeed, for a given coverage, a short interval is preferable. Or, equivalently, it is preferable to get a high coverage for a given average length. Those two measures enable us to perfom comparisons between different algorithms. DO WE ALSO ADD COMPUTATIONAL TIME ?\smallskip
+
+	
 \begin{itemize}
-\item Length and coverage as benchmark for comparison ;
-\item Autocorrelograms and A-transformation (and sample spacing);
+\item Do not forget to talk about this 10**smtg
+\item Validity of MCMB is assured if K (length of the chain) grows with n (number of observations) in a controlled manner ;
 \end{itemize}
 
 
@@ -316,10 +314,10 @@ A second strategy used in order to improve the efficiency of the algorithm is pa
 
 \newpage
 
-\section{Appendix}
+\section*{Appendix}
 
 
-\subsection{Proof of lemma left to the reader}
+\subsection*{Proof of lemma left to the reader}
 We give the details for some parts of proofs not detailed in the paper.
 
 \paragraph{Lemma 1, c)} We have that $\forall k, n$ : $Z_{n,k} = \sum_{i=1}^\infty \Lambda_n^i u_{n,k-i}$.
@@ -406,7 +404,9 @@ $$\sum_{i=0}^\infty\Lambda^i = (I - \Lambda)^{-1}, \text{ because } \sigma_{max}
 And thus : $$\sum_{i=1}^\infty\Lambda^i = (I - \Lambda)^{-1} - I$$
 CA REVIENT A FAIRE CE QU'IL Y A AU-DESSUS MAIS JE TROUVE TJRS PAS LA BONNE VARIANCE. JE RETOMBE SUR : $\Sigma - \Lambda\Sigma\Lambda'$
 
-\subsection{Time saving strategy of MCMB for quantile regression}
+
+
+\subsection*{Time saving strategy of MCMB for quantile regression}
 
 Let's notice that:
 
@@ -451,7 +451,7 @@ with $c(x_{i,j}, z_{i})=(2\tau-1)z_{i}\left[ \frac{\sum_{k=1}^{n+1}x_{k,j}}{\sum
 
 
 
-\subsection{MCMB algorithm with parallelization}
+\subsection*{MCMB algorithm with parallelization}
 
 \begin{algorithm}
 \caption{MCMB with parallelization}\label{parallel}
