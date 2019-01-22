@@ -268,8 +268,10 @@ def simul_model_multi_gaussian(n, p, mu, cov, sigma_e, coefs, seed=None):
     rnd = np.random.RandomState(seed)
     
     e = rnd.normal(size=n, loc=0, scale=sigma_e).reshape((-1,1))
+    e = np.transpose(e)
     
-    X = rnd.multivariate_normal(mean=mean, cov=cov, check_valid='raise', size=n)
+#    X = rnd.multivariate_normal(mean=mean, cov=cov, check_valid='raise', size=n)
+    X = rnd.multivariate_normal(mean=mean, cov=cov, size=n)
     return (np.dot(X,coefs) + e,X)
 
 ### Paper He & Hu 2000 setting
