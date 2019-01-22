@@ -120,7 +120,7 @@ def weighted_quantile(X, Y, Z, beta, j, tau):
     return quantile_1D(np.reshape(Z_star, -1), np.reshape(abs_X_j, -1), tau_star)
     
 
-def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_chain=False, sample_spacing=1, parallelize_mode='seq'):
+def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_chain=False, sample_spacing=1, burn_in=0, parallelize_mode='seq'):
     '''
     MCMB algorithm
     Y: dependant variable 1-d numpy.ndarray
@@ -157,7 +157,7 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_c
     Z = X_to_Z(X, Y, beta_hat, tau)
     vec_wq = np.vectorize(weighted_quantile, excluded=['X','Y','Z','beta','tau'])
 
-    remaining_iter = size*sample_spacing
+    remaining_iter = size*sample_spacing + burn_in
 
     while remaining_iter>0:
         if parallelize_mode=='seq': # Same updating than in Kocherginsky & al.
@@ -168,13 +168,14 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_c
         elif parallelize_mode=='p': # All the betas_j are updated at the sime time.
             beta = vec_wq(j=np.arange(p),beta=beta, X=X, Y=Y, Z=Z, tau=tau)
             
-        else: # n_cores betas_j are updated at each iteration of the loop 
+        elif parallelize_mode=='bp': # n_cores betas_j are updated at each iteration of the loop 
             for k in range(1,int(np.ceil(p/n_cores)+1)):
                 min_index = (k-1)*n_cores
                 max_index = min(k*n_cores,p)
                 beta = np.concatenate((beta[0:min_index],vec_wq(j=np.arange(min_index,max_index),
                                        beta=beta, X=X, Y=Y, Z=Z, tau=tau),beta[max_index:]))
-        
+        else:
+            raise ValueError('Please enter a valid parallezing mode')
         # Each sample_spacing iterations, we sample the betas
         if remaining_iter%sample_spacing == 0:
             Beta.append(copy.deepcopy(beta))
@@ -233,13 +234,13 @@ def plot_same_graph(betas_chains, autocorr=True, title=''):
         axs[i] = df.iloc[:,i].plot(color=(clrs[i][0],clrs[i][1],clrs[i][2],clrs[i][3]), grid=True, label='Beta'+str(i))
         #axs[i] = auto_corr.iloc[:,i].plot(color=(0,0.5,0.2,0.1), grid=True, label='Beta'+str(i))
        
-    h,l = {}, {}
+    h = {}
+    l = ['Beta'+str(i) for i in range(1,p+1)]
     for i in range(p):
-        h[i], l[i] = axs[i].get_legend_handles_labels()
-        
+        h[i] = axs[i].get_legend_handles_labels()[0]
     
     
-    plt.legend([h[i] for i in range(p)][0], [h[i] for i in range(p)][0], loc=2)
+    plt.legend([h[i] for i in range(p)][0], [l for i in range(p)][0], loc=2)
     plt.show()
 
 
@@ -260,11 +261,10 @@ def simul_model1(n, with_cst=False ,seed=None): # Model 1 of Kocherginsky (2002)
     return (np.dot(X,coefs_) + e,X)
 
 
-def simul_indep_multi_gaussian(n, p, mu, sigma, sigma_e ,coefs, seed=None):
+def simul_model_multi_gaussian(n, p, mu, cov, sigma_e, coefs, seed=None):
     """ Simulate a multivariate gaussian matrix of size "size" 
     independant gaussian vector of variance sigma (and null covariance by construction)"""
-    mean = np.array([mu]*p)
-    cov = np.identity(p)
+    mean = np.full(p, mu)
     rnd = np.random.RandomState(seed)
     
     e = rnd.normal(size=n, loc=0, scale=sigma_e).reshape((-1,1))
