@@ -6,7 +6,7 @@ Created on Sat Jan  5 20:39:49 2019
 """
 
 import os
-os.chdir("C:/Users/Bruno/Documents/GitHub/MCMB")
+os.chdir("G:/Documents/ENSAE/3A ENSAE/Semi and non parametric econometrics")
 
 from functions import *
 import numpy as np
@@ -17,77 +17,130 @@ from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 ### Paper He & Hu 2000 setting
 
+conf_lvl = 0.10 # coverage for a 90 % confidence interval averaged over the three slope parameters
+Kn = 1000 # chain length
+tau = 0.5   # percentile
+#tau = 0.2
+#tau = 0.8
 
-def simulation(conf_lvl = 0.10, n=1000, Kn = 300, tau = 0.5, samples = 200, 
-               p=5, sigma_e=1):    
-    # MCMB interval coverage and interval length
+# MCMB interval coverage and interval length
     
-    mean_coverage = [] # store proportion of "insiders" by iteration
-    mean_length = [] # store mean length by iteration
-    exploding = 0
+mean_coverage = [] # store proportion of "insiders" by iteration
+mean_length = [] # store mean length by iteration
+exploding = 0
+
+samples = 500   # choose number of samples
+#samples = 12
+beta_exploding = []
+IC_exploding = []
+chain_exploding = []
+iteration = 1
+fails=0
+
+while iteration<=samples+fails:
+    print(iteration)
+    np.random.seed(iteration)
     
-       # choose number of samples
-    #samples = 12
-    beta_exploding = []
-    IC_exploding = []
-    chain_exploding = []
-    iteration = 1
-    fails=0
+    with warnings.catch_warnings(record=True) as w: # If Quantrreg does not converge we redraw a sample
+        model = simul_originmod(n=50,df=3,seed=iteration)
+        #model = simul_originmod(n=50,df=8, seed=iteration)
+        Y = model[0]
+        X = model[1]
+
+        beta, IC = MCMB(Y=Y, X=X, tau=tau, size=Kn, alpha=conf_lvl, parallelize_mode='seq')
+        if any([issubclass(warn.category, IterationLimitWarning)for warn  in w]):
+            print('Fail')
+            fails+=1
+            iteration+=1
+            continue # go on to the next iteration
+   
+    tag=0
+    length=[]
+    check_convergence = 0
     
-    while iteration<=samples+fails:
-        print(iteration)
-        np.random.seed(iteration)
+    if any([any(np.abs(elem)>3) for elem  in IC]): # If the borns of one interval is too big then we treats the intervals as exploding
+        chain_exploding.append(MCMB(Y=Y, X=X, tau=tau, size=Kn, alpha=conf_lvl, parallelize_mode='seq', return_chain=True))
+        beta_exploding.append(beta)
+        exploding +=1
+        IC_exploding.append(IC)
         
-        with warnings.catch_warnings(record=True) as w: # If Quantrreg does not converge we redraw a sample
-            coefs = np.repeat(0, p)
-            mu = np.repeat(0, p)
-            cov = 0.4*np.identity(p)+0.6*np.ones((p,p))
-            model = simul_model_multi_gaussian(n=n, p=p, mu=mu, cov=cov,
-                                               sigma_e=1, coefs=coefs, seed=None)
-            #model = simul_originmod(n=50,df=8, seed=iteration)
-            Y = np.transpose(model[0])
-            X = model[1]
+    else: # Else we count the number of intervals among the p intervals that includes the right values 
+        for i in IC:
+            length.append(i[1] - i[0])
+            if 0 >= i[0] and i[1] >= 0 :
+                tag += 1 
+        mean_coverage.append(np.divide(tag,len(beta)))
+        mean_length.append(np.divide(length,len(beta)))
+        
+    iteration+=1
     
-            beta, IC = MCMB(Y=Y, X=X, tau=tau, size=Kn, alpha=conf_lvl, parallelize_mode='seq')
-            if any([issubclass(warn.category, IterationLimitWarning)for warn  in w]):
-                print('Fail')
-                fails+=1
-                iteration+=1
-                continue # go on to the next iteration
-       
-        tag=0
-        length=[]
-        check_convergence = 0
-        
-        if any([any(np.abs(elem)>3) for elem  in IC]): # If the borns of one interval is too big then we treats the intervals as exploding
-            chain_exploding.append(MCMB(Y=Y, X=X, tau=tau, size=Kn, alpha=conf_lvl, parallelize_mode='seq', return_chain=True))
-            beta_exploding.append(beta)
-            exploding +=1
-            IC_exploding.append(IC)
-            
-        else: # Else we count the number of intervals among the p intervals that includes the right values 
-            for i in IC:
-                length.append(i[1] - i[0])
-                if 0 >= i[0] and i[1] >= 0 :
-                    tag += 1 
-            mean_coverage.append(np.divide(tag,len(beta)))
-            mean_length.append(np.divide(length,len(beta)))
-            
-        iteration+=1
-        
-    print('Mean coverage', np.mean(mean_coverage)*100)
-    print('Mean length ', np.mean(mean_length))
-    print('Percentage of exploding bounds', np.divide(exploding,samples)*100)
-
-
-simulation(conf_lvl = 0.10, n=1000, Kn = 300, tau = 0.5, samples = 200, 
-               p=5, sigma_e=1)
-
-
-
+print('Mean coverage', np.mean(mean_coverage)*100)
+print('Mean length ', np.mean(mean_length))
+print('Percentage of exploding bounds', np.divide(exploding,samples)*100)
 
 
 ### Model with heteroskedasticity
+mean_coverage = [] # store proportion of "insiders" by iteration
+mean_length = [] # store mean length by iteration
+exploding = 0
+
+samples = 500   # choose number of samples
+#samples = 12
+beta_exploding = []
+IC_exploding = []
+chain_exploding = []
+iteration = 1
+fails=0
+quant_fail = 0
+
+while iteration<=samples+fails:
+    print(iteration)
+    np.random.seed(iteration)
+    
+    with warnings.catch_warnings(record=True) as w: # If Quantrreg does not converge we redraw a sample
+        #model = simul_originmod_het(n=50,df=3,seed=iteration)
+        model = simul_originmod_het(n=50,df=8,seed=iteration)
+        Y = model[0]
+        X = model[1]
+
+        try:
+            beta, IC = MCMB(Y=Y, X=X, tau=tau, size=Kn, alpha=conf_lvl, parallelize_mode='seq')
+        except ValueError:
+            print("Quantreg fail")
+            quant_fail +=1
+        if any([issubclass(warn.category, IterationLimitWarning)for warn  in w]):
+            print('Fail')
+            fails+=1
+            iteration+=1
+            continue # go on to the next iteration
+   
+    tag=0
+    length=[]
+    check_convergence = 0
+    
+    if any([any(np.abs(elem)>3) for elem  in IC]): # If the borns of one interval is too big then we treats the intervals as exploding
+        chain_exploding.append(MCMB(Y=Y, X=X, tau=tau, size=Kn, alpha=conf_lvl, parallelize_mode='seq', return_chain=True))
+        beta_exploding.append(beta)
+        exploding +=1
+        IC_exploding.append(IC)
+        
+    else: # Else we count the number of intervals among the p intervals that includes the right values 
+        for i in IC:
+            length.append(i[1] - i[0])
+            if 0 >= i[0] and i[1] >= 0 :
+                tag += 1 
+        mean_coverage.append(np.divide(tag,len(beta)))
+        mean_length.append(np.divide(length,len(beta)))
+        
+    iteration+=1
+    
+print('Mean coverage', np.mean(mean_coverage)*100)
+print('Mean length ', np.mean(mean_length))
+print('Percentage of exploding bounds', np.divide(exploding,samples)*100)
+
+
+
+# other case of heteroskedasticity
 
 np.random.seed(1)
 b_0 = 6      # true intercept
