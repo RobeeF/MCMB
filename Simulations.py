@@ -15,7 +15,9 @@ import warnings
 from statsmodels.tools.sm_exceptions import IterationLimitWarning
 
 
-### Paper He & Hu 2000 setting
+#====================================================================================
+# Reproducing the results of He & Hu (2002)
+#====================================================================================
 
 conf_lvl = 0.10 # coverage for a 90 % confidence interval averaged over the three slope parameters
 Kn = 1000 # chain length
@@ -79,7 +81,10 @@ print('Mean length ', np.mean(mean_length))
 print('Percentage of exploding bounds', np.divide(exploding,samples)*100)
 
 
-### Model with heteroskedasticity
+#====================================================================================
+# Model with heteroskedasticity 
+#====================================================================================
+
 mean_coverage = [] # store proportion of "insiders" by iteration
 mean_length = [] # store mean length by iteration
 exploding = 0
@@ -140,7 +145,9 @@ print('Percentage of exploding bounds', np.divide(exploding,samples)*100)
 
 
 
-# other case of heteroskedasticity
+#====================================================================================
+# Model with clustered heteroskedasticity and some integer variables (1)
+#====================================================================================
 
 np.random.seed(1)
 b_0 = 6      # true intercept
@@ -166,7 +173,6 @@ IC
 
 # Coverage
 samples = 200
-#samples = 500
 
 store = []
 for seed in range(1,samples+1):
@@ -192,7 +198,10 @@ for seed in range(1,samples+1):
 print('Mean coverage %s ' % np.mean(store))
 
 
-### Model with clustered heteroskedasticity and some integer variables
+#====================================================================================
+# Model with clustered heteroskedasticity and some integer variables (2)
+#====================================================================================
+
 n = 100
 
 # Population parameter
@@ -259,15 +268,70 @@ for seed in range(1,samples+1):
     
 print('Mean coverage %s ' % np.mean(store))
 
+#====================================================================================
+# Comparing the intervals of the regular and block-parallel versions of the algorithm
+#====================================================================================
 
-### Model with varying parameters
+samples = 500
+conf_lvl=0.10
 
-n = 1000
-# Population parameter
-beta = np.arange([0,3])
+mean_coverage_seq = [] # store proportion of "insiders" by iteration
+mean_length_seq = [] # store mean length by iteration
+
+mean_coverage_bp = [] # store proportion of "insiders" by iteration
+mean_length_bp = [] # store mean length by iteration
 
 
-### Minimum Lq estimator ?
 
+for seed in range(1,samples+1):
+    print(seed)
+    Kn = 100
+    covariances= 0.6
+    p = 10
+    n = 500
+    mu = 0
+    sigma = 1
+    
+    cov = np.full(p*p,covariances).reshape(p,p)
+    np.fill_diagonal(cov, np.full(sigma,1))
+    
+    sigma = np.ones(p)
+    sigma_e = 1
+    coefs = np.zeros(p).reshape(-1,1)
+    
+    model = simul_model_multi_gaussian(n, p, mu, cov, sigma_e ,coefs, seed=None)
+    Y = model[0]
+    X = model[1]
+    tau = 0.5
 
-## Varie n, Kn et p
+    beta_seq, IC_seq = MCMB(Y=Y, X=X, tau=tau, size=Kn, alpha=conf_lvl, parallelize_mode='seq', extension='A')
+    beta_bp, IC_bp = MCMB(Y=Y, X=X, tau=tau, size=Kn, alpha=conf_lvl, parallelize_mode='bp', extension='A')
+        
+    tag_seq=0
+    tag_bp=0
+    
+    length_seq=[]
+    length_bp=[]
+
+    for i in range(p):
+        length_seq.append(IC_seq[i][1] - IC_seq[i][0])
+        length_bp.append(IC_bp[i][1] - IC_bp[i][0])
+        
+        if 0 >= IC_seq[i][0] and IC_seq[i][1] >= 0:
+            tag_seq+=1 
+        if 0 >= IC_bp[i][0] and IC_bp[i][1] >= 0 :
+            tag_bp+=1
+                    
+    mean_coverage_seq.append(tag_seq/p)
+    mean_length_seq.append(np.mean(length_seq))
+    mean_coverage_bp.append(tag_bp/p)
+    mean_length_bp.append(np.mean(length_bp))
+            
+print('Mean coverage seq %s ' % np.mean(mean_coverage_seq))
+print('Mean length seq %s ' % np.mean(mean_length_seq))
+print('Variance length seq %s ' % np.std(mean_length_seq))
+
+print('Mean coverage bp %s ' % np.mean(mean_coverage_bp))
+print('Mean length bp %s ' % np.mean(mean_length_bp))
+print('Variance length bp %s ' % np.std(mean_length_bp))
+

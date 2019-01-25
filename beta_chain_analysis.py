@@ -10,7 +10,6 @@ os.chdir('C:/Users/robin/Documents/GitHub/MCMB')
 from functions import *
 import pandas as pd
 from statsmodels.graphics.tsaplots import plot_pacf
-#from statsmodels.graphics.tsaplots import plot_acf
 import numpy as np
 
 
@@ -84,12 +83,12 @@ plot_same_graph(betas_chains_p, title=' - parallelized method')
 plot_same_graph(betas_chains_A_p, title=' - A and parallelized method') 
 
 # Burn-in evaluation: no burn-in needed
-plot_same_graph(betas_chains, autocorr=False, title=' - classic method') # 10-18 iterations
-plot_same_graph(betas_chains_A, autocorr=False, title=' - A method') # 3 iterations
-plot_same_graph(betas_chains_A_50_first_iterations, autocorr=False, title=' - A method') # 3 iterations
-plot_same_graph(betas_chains_7s, autocorr=False, title=' - 7 sample spacing method') # 1-3 iterations
-plot_same_graph(betas_chains_p, autocorr=False, title=' - parallelized method') # 10-15 iterations with more variations
-plot_same_graph(betas_chains_A_p, autocorr=False, title=' - A and parallelized method') # 3 iterations
+plot_same_graph(betas_chains, autocorr=False, title=' - classic method') 
+plot_same_graph(betas_chains_A, autocorr=False, title=' - A method') 
+plot_same_graph(betas_chains_A_50_first_iterations, autocorr=False, title=' - A method') 
+plot_same_graph(betas_chains_7s, autocorr=False, title=' - 7 sample spacing method') 
+plot_same_graph(betas_chains_p, autocorr=False, title=' - parallelized method') 
+plot_same_graph(betas_chains_A_p, autocorr=False, title=' - A and parallelized method') 
 
 
 # Evaluate the sample-spacing: 3 is enough.
