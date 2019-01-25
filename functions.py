@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Nov 28 21:09:39 2018
-
 @author: Bruno
 """
 
@@ -10,8 +9,6 @@ Created on Wed Nov 28 21:09:39 2018
 #==============================================================================
 
 # Initialisation
-#import os
-#os.chdir(r"C:\Users\Bruno\Documents\Cours\ENSAE\Semi and Non Parametric Econometrics\Projet")
 
 # Packages
 import numpy as np
@@ -90,12 +87,12 @@ def X_to_Z(X, Y, beta, tau):
     return Z
 
 
-def weighted_quantile(X, Y, Z, beta, j, tau, seed):
+def weighted_quantile(X, Y, Z, beta, j, tau):
     '''
     Weighted quantile of Z, as solution of (3.4)
     '''
     # Draw a bootstrapped sample
-    Z_boot = resample(Z, random_state=seed)
+    Z_boot = resample(Z)
             
     #Take the j-th columns
     Z_j = Z_boot[:,j]
@@ -108,9 +105,8 @@ def weighted_quantile(X, Y, Z, beta, j, tau, seed):
     X_j = X[:,j]
     Y_star = residuals(Y, X_star, beta_star)    
     # Adding the n+1th row to Y_star and X_j
-    Y_star = np.append(Y_star, 10**15)
+    Y_star = np.append(Y_star, 3000)
     X_j = np.append(X_j, -c_star/tau)
-    
     Z_star = np.divide(Y_star, X_j)
     
     # Tau_star
@@ -120,16 +116,11 @@ def weighted_quantile(X, Y, Z, beta, j, tau, seed):
     # Normalization of weights (sum up to 1)
     S = sum(abs_X_j)
     abs_X_j = abs_X_j/S
-    
-    # Sorting Z in ascending order
-    abs_X_j = np.reshape(abs_X_j, (-1,1))
-    Z_star = np.reshape(Z_star, (-1,1))
 
-    
     return quantile_1D(np.reshape(Z_star, -1), np.reshape(abs_X_j, -1), tau_star)
     
 
-def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05 ,seed=None, verbose=False, return_chain=False, sample_spacing=1, parallelize_mode='seq'):
+def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_chain=False, sample_spacing=1, parallelize_mode='seq'):
     '''
     MCMB algorithm
     Y: dependant variable 1-d numpy.ndarray
@@ -153,7 +144,7 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05 ,seed=None, verbose=Fals
     
     # Estimation of beta_hat
     mod = QuantReg(Y, X)
-    res = mod.fit(q=tau)
+    res = mod.fit(q=tau, max_iter=7000)
     beta_hat = res.params
     
     
@@ -164,25 +155,25 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05 ,seed=None, verbose=Fals
     i = 0
 
     Z = X_to_Z(X, Y, beta_hat, tau)
-    vec_wq = np.vectorize(weighted_quantile, excluded=['X','Y','Z','beta','tau','seed'])
+    vec_wq = np.vectorize(weighted_quantile, excluded=['X','Y','Z','beta','tau'])
 
     remaining_iter = size*sample_spacing
 
     while remaining_iter>0:
         if parallelize_mode=='seq': # Same updating than in Kocherginsky & al.
             for j in range(p):            
-                beta_j =  weighted_quantile(X, Y, Z, beta, j, tau, seed)
+                beta_j =  weighted_quantile(X, Y, Z, beta, j, tau)
                 beta = np.concatenate((beta[:j],[beta_j],beta[j+1:]))
                 
         elif parallelize_mode=='p': # All the betas_j are updated at the sime time.
-            beta = vec_wq(j=np.arange(p),beta=beta, X=X, Y=Y, Z=Z, tau=tau, seed=seed)
+            beta = vec_wq(j=np.arange(p),beta=beta, X=X, Y=Y, Z=Z, tau=tau)
             
         else: # n_cores betas_j are updated at each iteration of the loop 
             for k in range(1,int(np.ceil(p/n_cores)+1)):
                 min_index = (k-1)*n_cores
                 max_index = min(k*n_cores,p)
                 beta = np.concatenate((beta[0:min_index],vec_wq(j=np.arange(min_index,max_index),
-                                       beta=beta, X=X, Y=Y, Z=Z, tau=tau, seed=seed),beta[max_index:]))
+                                       beta=beta, X=X, Y=Y, Z=Z, tau=tau),beta[max_index:]))
         
         # Each sample_spacing iterations, we sample the betas
         if remaining_iter%sample_spacing == 0:
@@ -203,11 +194,21 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05 ,seed=None, verbose=Fals
     CI =[]
     CI = [[beta_hat[i]-scipy.stats.norm.ppf(1-(alpha/2))*np.sqrt(Sigma[i,i]), 
        beta_hat[i]+scipy.stats.norm.ppf(1-(alpha/2))*np.sqrt(Sigma[i,i])] for i in range(p)]
-    
     return Beta if return_chain else (beta_hat, CI) 
 
-
+#==============================================================================
+# Ploting the betas
+#=============================================================================
+    
 def plot_same_graph(betas_chains, autocorr=True, title=''):
+    ''' Plot the betas series or the betas_autocorrelations series
+    betas_chains: (ndarray) the series
+    autocorr: (bool) display the serie or the autocorrelation serie
+    title: (str) a string to add to the title to identify the graph
+    ------------------------------------------------------------------
+    returns: The requested graph
+    '''
+    
     p = len(betas_chains)
     Kn = len(betas_chains[0])
     clrs = {}
@@ -240,3 +241,62 @@ def plot_same_graph(betas_chains, autocorr=True, title=''):
     
     plt.legend([h[i] for i in range(p)][0], [h[i] for i in range(p)][0], loc=2)
     plt.show()
+
+
+#==============================================================================
+# Simulations
+#=============================================================================
+    
+### Model 1
+def simul_model1(n, with_cst=False ,seed=None): # Model 1 of Kocherginsky (2002)
+    """ Simulate y= 1 + b1*x1 + b2*x2 + b3*x3 + e, with x1 following a standard normal, 
+    x3 is a U[0,1], x2=x1 + x3 + z, with z and e following a standard normal"""
+    rnd = np.random.RandomState(seed)
+    x1,e,z = rnd.normal(size=n).reshape((-1,1)), rnd.normal(size=n).reshape((-1,1)), rnd.normal(size=n).reshape((-1,1)) # generate 3 n-sample of std normal 
+    x3 = rnd.rand(n).reshape((-1,1))
+    x2 = x1+x3+z
+    X = np.hstack([np.ones((n,1)), x1, x2, x3]) if with_cst else np.hstack([x1, x2, x3])
+    coefs_ = np.ones((X.shape[1],1)).reshape(-1,1)
+    return (np.dot(X,coefs_) + e,X)
+
+
+def simul_indep_multi_gaussian(n, p, mu, sigma, sigma_e ,coefs, seed=None):
+    """ Simulate a multivariate gaussian matrix of size "size" 
+    independant gaussian vector of variance sigma (and null covariance by construction)"""
+    mean = np.array([mu]*p)
+    cov = np.identity(p)
+    rnd = np.random.RandomState(seed)
+    
+    e = rnd.normal(size=n, loc=0, scale=sigma_e).reshape((-1,1))
+    
+    X = rnd.multivariate_normal(mean=mean, cov=cov, check_valid='raise', size=n)
+    return (np.dot(X,coefs) + e,X)
+
+### Paper He & Hu 2000 setting
+
+def simul_originmod(n,df=3,seed=None):
+    """ Simulate y= b0 + b1*x1 + b2*x2 + b3*x3 + e, with x1,x2,x3 and e following a standard t-distribution (df = v), 
+    and b0=b1=b2=b3=0.
+  """
+    np.random.RandomState(seed)
+    X_1 = np.random.standard_t(df,n).reshape((-1,1))
+    X_2 = np.random.standard_t(df,n).reshape((-1,1))
+    X_3 = np.random.standard_t(df,n).reshape((-1,1))
+    e = np.random.standard_t(df,n).reshape((-1,1))
+    X = np.hstack([np.ones((n,1)), X_1, X_2, X_3])
+    coefs_ = np.zeros((X.shape[1],1)).reshape(-1,1)
+    return (np.dot(X,coefs_) + e,X)
+
+def simul_originmod_het(n,df=3,seed=None):
+    """ Simulate y= b0 + b1*x1 + b2*x2 + b3*x3 + e, with x1,x2,x3 and e following a standard t-distribution (df = v), 
+    and b0=b1=b2=b3=0.
+  """
+    np.random.RandomState(seed)
+    X_1 = np.exp(np.random.standard_t(df,n).reshape((-1,1)))
+    X_2 = np.exp(np.random.standard_t(df,n).reshape((-1,1)))
+    X_3 = np.exp(np.random.standard_t(df,n).reshape((-1,1)))
+    e = np.random.standard_t(df,n).reshape((-1,1)) * (1 + X_1 + X_2 + X_3)/5
+    X = np.hstack([np.ones((n,1)), X_1, X_2, X_3])
+    coefs_ = np.zeros((X.shape[1],1)).reshape(-1,1)
+    return (np.dot(X,coefs_) + e,X)
+
