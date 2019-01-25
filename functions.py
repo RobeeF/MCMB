@@ -28,8 +28,10 @@ import pandas as pd
 
 def compute_A(X): # Anciennement "standardisation"
     '''
-    X: array-like dataset
     Compute A = (X'X)^-(1/2) given in Kocherginsky & al. (2007) p1261 eq. (6)
+    X (ndarray): Covariates (n,p) numpy.ndarray
+    -------------------------------------------------------------
+    returns (X'X)^-(1/2) (ndarray)
     '''
     # Standardization of input array
     X_t = np.ndarray.transpose(X)
@@ -44,8 +46,10 @@ def psi(x, tau):
     '''
     Derivative of the check function
     
-    x: scalar
-    tau: real between 0 and 1
+    X (ndarray): Covariates (n,p) numpy.ndarray
+    tau (float): The quantile for the quantile regression
+    -------------------------------------------------------------
+    returns (array-like): The derivative of the check function evaluated in X and tau
     '''
     return tau*int(x >= 0) + (tau-1)*int(x < 0)
 
@@ -53,9 +57,12 @@ def psi(x, tau):
 def residuals(Y, X, beta):
     '''
     Computes residuals for a linear model
-    Y: dependent variable, array
-    X: regressors, array
-    beta: parameter, list
+    
+    Y (ndarray): dependant variable 1-d numpy.ndarray
+    X (ndarray): Covariates (n,p) numpy.ndarray
+    beta (array-like): The estimates of the coefficients
+    --------------------------------------------------------
+    returns e (array-like): The residuals of the estimated model
     '''
     Y = Y.reshape(-1,1)
     return Y-np.dot(X,beta).reshape(-1,1)
@@ -66,10 +73,12 @@ def X_to_Z(X, Y, beta, tau):
     Transforms a series of x in a series of z following the formula
     z_i = psi(residual_i)*x_i - z_hat
     
-    X: array-like object
-    Y: array-like object
-    beta: list
-    tau: scalar between 0 and 1
+    Y (ndarray): dependant variable 1-d numpy.ndarray
+    X (ndarray): Covariates (n,p) numpy.ndarray
+    beta (array-like): The estimates of the coefficients
+    tau (float): The quantile for the quantile regression
+    --------------------------------------------------------
+    returns Z (ndarray): The empirical counterpart of the first order condition of the quantile regression
     '''
     
     # Computation of residuals
@@ -89,7 +98,16 @@ def X_to_Z(X, Y, beta, tau):
 
 def weighted_quantile(X, Y, Z, beta, j, tau):
     '''
-    Weighted quantile of Z, as solution of (3.4)
+    Update n_cores components of beta at each loop iteration
+    
+    Y (ndarray): dependant variable 1-d numpy.ndarray
+    X (ndarray): Covariates (n,p) numpy.ndarray
+    Z (ndarray): Empirical counterpart of the first order condition
+    beta (array-like): The estimates of the coefficients
+    j (integer): The coordinate of the coefficient to update
+    tau (float): The quantile for the quantile regression
+    ----------------------------------------------------------
+    returns (array-like): The weighted quantile of Z to update beta_j, as solution of (3.4)
     '''
     # Draw a bootstrapped sample
     Z_boot = resample(Z)
@@ -119,6 +137,32 @@ def weighted_quantile(X, Y, Z, beta, j, tau):
 
     return quantile_1D(np.reshape(Z_star, -1), np.reshape(abs_X_j, -1), tau_star)
     
+@jit(parallel=True, nogil=True)
+def beta_update_numba(p, beta, X, Y, Z, tau, n_cores):
+    ''' Update n_cores components of beta at each loop iteration
+    p (integer): dimension of X
+    beta (array-like): The estimates of the coefficients
+    Y (ndarray): dependant variable 1-d numpy.ndarray
+    X (ndarray): Covariates (n,p) numpy.ndarray
+    Z (ndarray): Empirical counterpart of the first order condition
+    n_cores (integer): The number of cores of the computer
+    tau (float): The quantile for the quantile regression
+
+    --------------------------------------------------------------------------
+    returns beta (array-like): the updated betas
+    '''
+    for k in np.arange(1,int(np.ceil(p/n_cores)+1)):
+        new_beta = [] 
+        min_index = (k-1)*n_cores
+        max_index = min(k*n_cores,p)
+        
+        for idx in prange((k-1)*n_cores, min(k*n_cores,p)):
+            new_beta.append(weighted_quantile(X, Y, Z, beta, idx, tau))
+        
+        beta = np.concatenate((beta[0:min_index],np.array(new_beta),beta[max_index:]))
+    return np.array(beta)
+
+
 
 def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_chain=False, sample_spacing=1, parallelize_mode='seq'):
     '''
@@ -126,7 +170,7 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_c
     Y: dependant variable 1-d numpy.ndarray
     X: Covariates (n,p) numpy.ndarray
     max-iter: length of the Markov Chain to generate
-    extension: Which extension of the MCMB algorithm to use: A, B or AB
+    extension: Which extension of the MCMB algorithm to use: A or None
     alpha: degree of confidence for which the intervals are returned
     seed: Seed used to have reproductible results
     verbose: Set to True to display the computation details. Only one level of verbose
@@ -134,7 +178,7 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_c
     parallelize_mode: Type of parallelization the computation: p for parallel (all the betas are updated in parallel), bp for block parallel
         (n_jobs parallel betas are updated simultaneously), seq: as in Kocherginsky & al. the betas are updated sequentially.
     -----------------------------------
-    returns: the initial estimate of the Betas and the CIs computed if return_chain==False the beta chain otherwise
+    returns (tuple): the initial estimate of the Betas and the CIs computed if return_chain==False the beta chain otherwise
     '''
     n_cores = multiprocessing.cpu_count()
 
@@ -155,8 +199,7 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_c
     i = 0
 
     Z = X_to_Z(X, Y, beta_hat, tau)
-    vec_wq = np.vectorize(weighted_quantile, excluded=['X','Y','Z','beta','tau'])
-
+    
     remaining_iter = size*sample_spacing
 
     while remaining_iter>0:
@@ -165,16 +208,9 @@ def MCMB(Y, X, tau, size=50, extension=None, alpha=0.05, verbose=False, return_c
                 beta_j =  weighted_quantile(X, Y, Z, beta, j, tau)
                 beta = np.concatenate((beta[:j],[beta_j],beta[j+1:]))
                 
-        elif parallelize_mode=='p': # All the betas_j are updated at the sime time.
-            beta = vec_wq(j=np.arange(p),beta=beta, X=X, Y=Y, Z=Z, tau=tau)
-            
         else: # n_cores betas_j are updated at each iteration of the loop 
-            for k in range(1,int(np.ceil(p/n_cores)+1)):
-                min_index = (k-1)*n_cores
-                max_index = min(k*n_cores,p)
-                beta = np.concatenate((beta[0:min_index],vec_wq(j=np.arange(min_index,max_index),
-                                       beta=beta, X=X, Y=Y, Z=Z, tau=tau),beta[max_index:]))
-        
+            beta = beta_update_numba(p, beta, X, Y, Z, tau, n_cores)
+            
         # Each sample_spacing iterations, we sample the betas
         if remaining_iter%sample_spacing == 0:
             Beta.append(copy.deepcopy(beta))
@@ -206,7 +242,7 @@ def plot_same_graph(betas_chains, autocorr=True, title=''):
     autocorr: (bool) display the serie or the autocorrelation serie
     title: (str) a string to add to the title to identify the graph
     ------------------------------------------------------------------
-    returns: The requested graph
+    returns (graphs): The requested graph
     '''
     
     p = len(betas_chains)
@@ -247,22 +283,18 @@ def plot_same_graph(betas_chains, autocorr=True, title=''):
 # Simulations
 #=============================================================================
     
-### Model 1
-def simul_model1(n, with_cst=False ,seed=None): # Model 1 of Kocherginsky (2002)
-    """ Simulate y= 1 + b1*x1 + b2*x2 + b3*x3 + e, with x1 following a standard normal, 
-    x3 is a U[0,1], x2=x1 + x3 + z, with z and e following a standard normal"""
-    rnd = np.random.RandomState(seed)
-    x1,e,z = rnd.normal(size=n).reshape((-1,1)), rnd.normal(size=n).reshape((-1,1)), rnd.normal(size=n).reshape((-1,1)) # generate 3 n-sample of std normal 
-    x3 = rnd.rand(n).reshape((-1,1))
-    x2 = x1+x3+z
-    X = np.hstack([np.ones((n,1)), x1, x2, x3]) if with_cst else np.hstack([x1, x2, x3])
-    coefs_ = np.ones((X.shape[1],1)).reshape(-1,1)
-    return (np.dot(X,coefs_) + e,X)
-
-
 def simul_indep_multi_gaussian(n, p, mu, sigma, sigma_e ,coefs, seed=None):
-    """ Simulate a multivariate gaussian matrix of size "size" 
-    independant gaussian vector of variance sigma (and null covariance by construction)"""
+    """ Simulate a multivariate gaussian X and and a residual vector e from a centred normal 
+    and Y = X*coefs + e. 
+    n (integer): The size of the samples to generate
+    p (integer): The dimension of X
+    sigma (integer): The variance of each X
+    sigma_e (integer): The variance of the residuals 
+    coefs (array-like): The coefficients of the linear model
+    seed (integer): A seed to stuck the generator to a precise point and obtain reproducible results
+    ------------------------------------------------------------------------------------------
+    returns Y,X (array-like, ndarray): The independant variables and the dependant variable
+    """
     mean = np.array([mu]*p)
     cov = np.identity(p)
     rnd = np.random.RandomState(seed)
@@ -277,6 +309,9 @@ def simul_indep_multi_gaussian(n, p, mu, sigma, sigma_e ,coefs, seed=None):
 def simul_originmod(n,df=3,seed=None):
     """ Simulate y= b0 + b1*x1 + b2*x2 + b3*x3 + e, with x1,x2,x3 and e following a standard t-distribution (df = v), 
     and b0=b1=b2=b3=0.
+    seed (integer): A seed to stuck the generator to a precise point and obtain reproducible results
+    ------------------------------------------------
+    returns Y,X (array-like, ndarray): The independant variables and the dependant variable
   """
     np.random.RandomState(seed)
     X_1 = np.random.standard_t(df,n).reshape((-1,1))
@@ -290,6 +325,9 @@ def simul_originmod(n,df=3,seed=None):
 def simul_originmod_het(n,df=3,seed=None):
     """ Simulate y= b0 + b1*x1 + b2*x2 + b3*x3 + e, with x1,x2,x3 and e following a standard t-distribution (df = v), 
     and b0=b1=b2=b3=0.
+    seed (integer): A seed to stuck the generator to a precise point and obtain reproducible results
+    ------------------------------------------------
+    returns Y,X (array-like, ndarray): The independant variables and the dependant variable
   """
     np.random.RandomState(seed)
     X_1 = np.exp(np.random.standard_t(df,n).reshape((-1,1)))
